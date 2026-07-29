@@ -11,10 +11,10 @@
                (* -400 x1 (- x2 (* x1 x1))))
             (* 200 (- x2 (* x1 x1))))))
 
-(defun fit-rosenbrock (&key (trace nil))
+(defun fit-rosenbrock (&key (use-grad t) (trace nil))
   (let ((res (cl+lbfgsb3:lbfgsb3 #'rosenbrock
                                  #(-1.2d0 1.0d0)
-                                 :gr #'rosenbrock-grad
+                                 :gr (if use-grad #'rosenbrock-grad nil)
                                  :m 5
                                  :factr 1d0
                                  :pgtol 1d-4

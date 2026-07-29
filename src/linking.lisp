@@ -31,7 +31,6 @@
 (defvar *fortran-prints-enabled*)
 
 (defun ensure-so-bytes ()
-  "Read liblbfgsb3.so into *lbfgsb3-so-bytes* if not already done."
   (bt:with-lock-held (*lbfgsb3-so-bytes-lock*)
     (unless *lbfgsb3-so-bytes*
       (let ((path (asdf:system-relative-pathname
@@ -69,11 +68,10 @@
            (let ((fn (%linking-dlsym lib "setulb_")))
              (when (cffi:null-pointer-p fn)
                (error "linking_dlsym(\"setulb_\") failed"))
-             (let ((flag (%linking-dlsym lib "printctrl_")))   ; gfortran default
+             (let ((flag (%linking-dlsym lib "printctrl_")))
                (unless (cffi:null-pointer-p flag)
                  (setf (cffi:mem-ref flag :int)
                        (if *fortran-prints-enabled* 1 0))))
-             ;; Exact signature of the original defcfun
              (cffi:foreign-funcall-pointer fn ()
                :pointer n
                :pointer m
@@ -94,15 +92,11 @@
                :pointer isave
                :pointer dsave
                :void)))
-      ;; Always unload, even if an error occurred after a successful load.
       (when (and lib (not (cffi:null-pointer-p lib)))
         (%unload-library-from-memory lib)))))
 
 (defun setulb (n m x l u nbd f g factr pgtol wa iwa
                itask iprint icsave lsave isave dsave)
-  "Call the L-BFGS-B setulb_ routine.
-Each invocation loads the library from the memory-resident .so and
-unloads it again afterwards."
   (call-setulb-from-memory
    n m x l u nbd f g factr pgtol wa iwa
    itask iprint icsave lsave isave dsave))

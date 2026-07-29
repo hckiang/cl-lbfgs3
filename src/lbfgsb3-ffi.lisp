@@ -1,41 +1,6 @@
 (in-package #:cl+lbfgsb3)
 
-#|
-(cffi:define-foreign-library liblbfgsb3
-  (:darwin (:or "liblbfgsb3.dylib" "liblbfgsb3.so"))
-  (:unix   "liblbfgsb3.so")
-  (:windows "lbfgsb3.dll")
-  (t (:default "liblbfgsb3")))
-
-(defun ensure-lib-loaded ()
-  (let ((dir (asdf:system-relative-pathname "cl+lbfgsb3" "lib/")))
-    (pushnew dir cffi:*foreign-library-directories* :test #'equal)
-    (cffi:use-foreign-library liblbfgsb3)))
-
-(cffi:defcfun ("setulb_" setulb) :void
-  (n      :pointer)
-  (m      :pointer)
-  (x      :pointer)
-  (l      :pointer)
-  (u      :pointer)
-  (nbd    :pointer)
-  (f      :pointer)
-  (g      :pointer)
-  (factr  :pointer)
-  (pgtol  :pointer)
-  (wa     :pointer)
-  (iwa    :pointer)
-  (itask  :pointer)
-  (iprint :pointer)
-  (icsave :pointer)
-  (lsave  :pointer)
-  (isave  :pointer)
-  (dsave  :pointer))
-
-(ensure-lib-loaded)
-|#
-
-(defstruct (lbfgsb3-result (:conc-name lbfgsb3-result-))
+(defstruct lbfgsb3-result
   x                      ; final point (simple-vector of double-float)
   f                      ; final function value
   g                      ; final gradient
@@ -124,28 +89,15 @@
                   (gr nil)
                   lower upper
                   (m 10)
-                  (factr 1d7)
+                  (factr 1d6)
                   (pgtol 1d-5)
                   (max-iter 200)
                   (max-fg 2500)
                   (iprint -1)
                   (trace nil))
-  "Minimise FN starting from X0 using L-BFGS-B 3.0 (Fortran).
-
-FN  – function of a double-float vector → double-float
-GR  – gradient function (same vector → double-float vector).
-      If NIL, a simple forward-difference approximation is used
-      (not recommended for production).
-
-LOWER / UPPER – nil (unbounded), a number (same bound for all variables),
-                or a sequence of length (length X0).
-
-Returns an LBFGSB3-RESULT structure."
-
   (let ((*fortran-prints-enabled* trace)) 
     (unless gr
       (setf gr (make-finite-difference-gradient fn)))
-
     (let* ((n       (length x0))
            (x0      (map '(vector double-float) (lambda (v) (float v 1d0)) x0))
            (nbd-vec (make-nbd n lower upper))
@@ -160,8 +112,6 @@ Returns an LBFGSB3-RESULT structure."
                              (if (vectorp upper) upper (make-array n :initial-element upper)))
                         (make-array n :element-type 'double-float :initial-element 1d100)))
            (wa-size (+ (* 2 m n) (* 5 n) (* 11 m m) (* 8 m))))
-
-      ;; foreign storage
       (with-foreign-objects
           ((pn      :int)
            (pm      :int)
@@ -181,8 +131,6 @@ Returns an LBFGSB3-RESULT structure."
            (lsave   :int 4)
            (isave   :int 44)
            (dsave   :double 29))
-
-        ;; initialise scalars
         (setf (mem-ref pn      :int)    n
               (mem-ref pm      :int)    m
               (mem-ref pfactr  :double) factr
@@ -190,29 +138,22 @@ Returns an LBFGSB3-RESULT structure."
               (mem-ref piprint :int)    iprint
               (mem-ref itask   :int)    2      ; START
               (mem-ref icsave  :int)    0)
-
-        ;; zero workspaces (critical)
         (dotimes (i wa-size) (setf (mem-aref wa :double i) 0d0))
         (dotimes (i (* 3 n)) (setf (mem-aref iwa :int i) 0))
         (dotimes (i 4)       (setf (mem-aref lsave :int i) 0))
         (dotimes (i 44)      (setf (mem-aref isave :int i) 0))
         (dotimes (i 29)      (setf (mem-aref dsave :double i) 0d0))
-
-        ;; copy initial data
         (copy-to-foreign x0     x   :double)
         (copy-to-foreign lo-vec l   :double)
         (copy-to-foreign up-vec u   :double)
         (copy-to-foreign nbd-vec nbd :int)
-
         (let ((n-fg 0)
               (lisp-x (make-array n :element-type 'double-float)))
-
           (loop
             (setulb pn pm x l u nbd f g pfactr ppgtol
                     wa iwa itask piprint icsave lsave isave dsave)
             (let ((task (mem-ref itask :int)))
               (cond
-                ;; ----- evaluate f and g -----
                 ((member task '(4 20 21))
                  (incf n-fg)
                  (when (> n-fg max-fg)
@@ -225,17 +166,13 @@ Returns an LBFGSB3-RESULT structure."
                       :n-iter (mem-aref isave :int 29)
                       :n-fg n-fg
                       :message "MAX_FG_EVALUATIONS_REACHED")))
-
-                 ;; copy current x into a Lisp vector
                  (dotimes (i n)
                    (setf (aref lisp-x i) (mem-aref x :double i)))
-
                  (let ((fv (funcall fn lisp-x))
                        (gv (funcall gr lisp-x)))
                    (setf (mem-ref f :double) (float fv 1d0))
                    (dotimes (i n)
                      (setf (mem-aref g :double i) (float (elt gv i) )))))
-
                 ;; NEW_X : optional iteration limit
                 ((= task 1)
                  (let ((iter (mem-aref isave :int 29)))
@@ -249,7 +186,6 @@ Returns an LBFGSB3-RESULT structure."
                         :n-iter iter
                         :n-fg n-fg
                         :message "MAX_ITERATIONS_REACHED")))))
-
                 ;; successful termination
                 ((member task '(6 7 8))
                  (return-from lbfgsb3
@@ -261,7 +197,6 @@ Returns an LBFGSB3-RESULT structure."
                     :n-iter (mem-aref isave :int 29)
                     :n-fg n-fg
                     :message (task-message task))))
-
                 ;; error / warning / unknown
                 (t
                  (return-from lbfgsb3
@@ -273,31 +208,3 @@ Returns an LBFGSB3-RESULT structure."
                     :n-iter (mem-aref isave :int 29)
                     :n-fg n-fg
                     :message (task-message task))))))))))))
-
-
-#|
-(defun rosenbrock (x)
-  (let ((x1 (aref x 0)) (x2 (aref x 1)))
-    (+ (expt (- 1 x1) 2)
-       (* 100 (expt (- x2 (* x1 x1)) 2)))))
-
-(defun rosenbrock-grad (x)
-  (let ((x1 (aref x 0)) (x2 (aref x 1)))
-    (vector (+ (* -2 (- 1 x1))
-               (* -400 x1 (- x2 (* x1 x1))))
-            (* 200 (- x2 (* x1 x1))))))
-
-(let ((res (lbfgsb3 #'rosenbrock
-                    #(-1.2d0 1.0d0)
-                    :gr #'rosenbrock-grad
-                    :m 5
-                    :factr 0d0
-                    :pgtol 1d-5
-                    :iprint 1)))
-  (format t "x       = ~A~%" (lbfgsb3-result-x res))
-  (format t "f       = ~A~%" (lbfgsb3-result-f res))
-  (format t "n-iter  = ~A~%" (lbfgsb3-result-n-iter res))
-  (format t "n-fg    = ~A~%" (lbfgsb3-result-n-fg res))
-  (format t "message = ~A~%" (lbfgsb3-result-message res)))
-
-|#
