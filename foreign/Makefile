@@ -25,6 +25,10 @@ ifeq ($(UNAME_S),FreeBSD)
   CFLAGS  += -ftls-model=global-dynamic
 endif
 
+ifeq ($(UNAME_S),Linux)
+  LDFLAGS += -ldl
+endif
+
 LDFLAGS = -shared \
           -Wl,--gc-sections
 
