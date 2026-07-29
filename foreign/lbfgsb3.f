@@ -2733,8 +2733,9 @@ c      csave = 'START'
 c                               the directional derivative >=0.
 c                               Line search is impossible.
 cw            write(6,*)' ascent direction in projection gd = ', gd
-              call dblepr1(' ascent direction in projection gd = ',
-     +     -1, gd)
+c             TEMPORARY!!!!
+c              call dblepr1(' ascent direction in projection gd = ',
+c     +     -1, gd)
             info = -4
             return
          endif

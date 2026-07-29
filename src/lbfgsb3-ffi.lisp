@@ -1,5 +1,6 @@
 (in-package #:cl+lbfgsb3)
 
+#|
 (cffi:define-foreign-library liblbfgsb3
   (:darwin (:or "liblbfgsb3.dylib" "liblbfgsb3.so"))
   (:unix   "liblbfgsb3.so")
@@ -32,6 +33,7 @@
   (dsave  :pointer))
 
 (ensure-lib-loaded)
+|#
 
 (defstruct (lbfgsb3-result (:conc-name lbfgsb3-result-))
   x                      ; final point (simple-vector of double-float)
@@ -205,7 +207,6 @@ Returns an LBFGSB3-RESULT structure."
         (loop
           (setulb pn pm x l u nbd f g pfactr ppgtol
                   wa iwa itask piprint icsave lsave isave dsave)
-
           (let ((task (mem-ref itask :int)))
             (cond
               ;; ----- evaluate f and g -----
@@ -230,9 +231,9 @@ Returns an LBFGSB3-RESULT structure."
                      (gv (funcall gr lisp-x)))
                  (setf (mem-ref f :double) (float fv 1d0))
                  (dotimes (i n)
-                   (setf (mem-aref g :double i) (float (elt gv i) 1d0)))))
+                   (setf (mem-aref g :double i) (float (elt gv i) )))))
 
-              ;; ----- NEW_X : optional iteration limit -----
+              ;; NEW_X : optional iteration limit
               ((= task 1)
                (let ((iter (mem-aref isave :int 29)))
                  (when (and max-iter (>= iter max-iter))
@@ -246,7 +247,7 @@ Returns an LBFGSB3-RESULT structure."
                       :n-fg n-fg
                       :message "MAX_ITERATIONS_REACHED")))))
 
-              ;; ----- successful termination -----
+              ;; successful termination
               ((member task '(6 7 8))
                (return-from lbfgsb3
                  (make-lbfgsb3-result
@@ -258,7 +259,7 @@ Returns an LBFGSB3-RESULT structure."
                   :n-fg n-fg
                   :message (task-message task))))
 
-              ;; ----- error / warning / unknown -----
+              ;; error / warning / unknown
               (t
                (return-from lbfgsb3
                  (make-lbfgsb3-result
