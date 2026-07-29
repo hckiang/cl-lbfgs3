@@ -11,14 +11,15 @@
                (* -400 x1 (- x2 (* x1 x1))))
             (* 200 (- x2 (* x1 x1))))))
 
-(defun fit-rosenbrock ()
+(defun fit-rosenbrock (&key (trace nil))
   (let ((res (cl+lbfgsb3:lbfgsb3 #'rosenbrock
                                  #(-1.2d0 1.0d0)
                                  :gr #'rosenbrock-grad
                                  :m 5
                                  :factr 1d0
                                  :pgtol 1d-4
-                                 :iprint -1)))
+                                 :iprint -1
+                                 :trace trace)))
     ;; (format t "x       = ~A~%" (cl+lbfgsb3:lbfgsb3-result-x res))
     ;; (format t "f       = ~A~%" (cl+lbfgsb3:lbfgsb3-result-f res))
     ;; (format t "n-iter  = ~A~%" (cl+lbfgsb3:lbfgsb3-result-n-iter res))

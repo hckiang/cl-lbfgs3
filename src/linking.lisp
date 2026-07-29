@@ -28,6 +28,7 @@
 
 (defvar *lbfgsb3-so-bytes* nil)
 (defvar *lbfgsb3-so-bytes-lock* (bt:make-lock "LBFGSB3-SO-BYTES"))
+(defvar *fortran-prints-enabled*)
 
 (defun ensure-so-bytes ()
   "Read liblbfgsb3.so into *lbfgsb3-so-bytes* if not already done."
@@ -64,10 +65,14 @@
            (when (or (null lib) (cffi:null-pointer-p lib))
              (error "load_library_from_memory failed~@[ : ~A~]"
                     (ignore-errors
-                      (cffi:foreign-funcall "dlerror" :string))))
+                     (cffi:foreign-funcall "dlerror" :string))))
            (let ((fn (%linking-dlsym lib "setulb_")))
              (when (cffi:null-pointer-p fn)
                (error "linking_dlsym(\"setulb_\") failed"))
+             (let ((flag (%linking-dlsym lib "printctrl_")))   ; gfortran default
+               (unless (cffi:null-pointer-p flag)
+                 (setf (cffi:mem-ref flag :int)
+                       (if *fortran-prints-enabled* 1 0))))
              ;; Exact signature of the original defcfun
              (cffi:foreign-funcall-pointer fn ()
                :pointer n

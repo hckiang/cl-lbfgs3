@@ -1,11 +1,25 @@
-c     Minimal replacements for R's intpr / dblepr / dblepr1
+c     Controlled replacements for R's intpr / dblepr / dblepr1
 c     for use with L-BFGS-B from Common Lisp.
+c
+c     The integer doprint lives in COMMON /printctrl/.
+c     After each dlopen of a private image locate the symbol
+c     "printctrl_" (gfortran) and set it:
+c         1 = print (default)
+c         0 = silent
+c
+      block data printctrl_init
+      integer doprint
+      common /printctrl/ doprint
+      data doprint /1/
+      end
 
       subroutine intpr(label, nchar, data, ndata)
       implicit none
       character*(*) label
       integer nchar, ndata, data(*)
-      integer nc, i
+      integer nc, i, doprint
+      common /printctrl/ doprint
+      if (doprint .eq. 0) return
       nc = nchar
       if (nc .lt. 0) nc = len(label)
       if (ndata .le. 0) then
@@ -20,7 +34,9 @@ c     for use with L-BFGS-B from Common Lisp.
       character*(*) label
       integer nchar, ndata
       double precision data(*)
-      integer nc, i
+      integer nc, i, doprint
+      common /printctrl/ doprint
+      if (doprint .eq. 0) return
       nc = nchar
       if (nc .lt. 0) nc = len(label)
       if (ndata .le. 0) then

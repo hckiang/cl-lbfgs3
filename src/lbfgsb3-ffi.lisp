@@ -119,15 +119,17 @@
           (setf (aref g i) (/ (- (funcall fn x) f0) step))
           (setf (aref x i) xi))))))
 
-(defun lbfgsb3 (fn x0 &key
-                   (gr nil)
-                   lower upper
-                   (m 10)
-                   (factr 1d7)
-                   (pgtol 1d-5)
-                   (max-iter 200)
-                   (max-fg 2500)
-                   (iprint -1))
+(defun lbfgsb3 (fn x0
+                &key
+                  (gr nil)
+                  lower upper
+                  (m 10)
+                  (factr 1d7)
+                  (pgtol 1d-5)
+                  (max-iter 200)
+                  (max-fg 2500)
+                  (iprint -1)
+                  (trace nil))
   "Minimise FN starting from X0 using L-BFGS-B 3.0 (Fortran).
 
 FN  – function of a double-float vector → double-float
@@ -140,79 +142,116 @@ LOWER / UPPER – nil (unbounded), a number (same bound for all variables),
 
 Returns an LBFGSB3-RESULT structure."
 
-  (unless gr
-    (setf gr (make-finite-difference-gradient fn)))
+  (let ((*fortran-prints-enabled* trace)) 
+    (unless gr
+      (setf gr (make-finite-difference-gradient fn)))
 
-  (let* ((n       (length x0))
-         (x0      (map '(vector double-float) (lambda (v) (float v 1d0)) x0))
-         (nbd-vec (make-nbd n lower upper))
-         (lo-vec  (if lower
-                      (map '(vector double-float)
-                           (lambda (v) (float (or v -1d100) 1d0))
-                           (if (vectorp lower) lower (make-array n :initial-element lower)))
-                      (make-array n :element-type 'double-float :initial-element -1d100)))
-         (up-vec  (if upper
-                      (map '(vector double-float)
-                           (lambda (v) (float (or v 1d100) 1d0))
-                           (if (vectorp upper) upper (make-array n :initial-element upper)))
-                      (make-array n :element-type 'double-float :initial-element 1d100)))
-         (wa-size (+ (* 2 m n) (* 5 n) (* 11 m m) (* 8 m))))
+    (let* ((n       (length x0))
+           (x0      (map '(vector double-float) (lambda (v) (float v 1d0)) x0))
+           (nbd-vec (make-nbd n lower upper))
+           (lo-vec  (if lower
+                        (map '(vector double-float)
+                             (lambda (v) (float (or v -1d100) 1d0))
+                             (if (vectorp lower) lower (make-array n :initial-element lower)))
+                        (make-array n :element-type 'double-float :initial-element -1d100)))
+           (up-vec  (if upper
+                        (map '(vector double-float)
+                             (lambda (v) (float (or v 1d100) 1d0))
+                             (if (vectorp upper) upper (make-array n :initial-element upper)))
+                        (make-array n :element-type 'double-float :initial-element 1d100)))
+           (wa-size (+ (* 2 m n) (* 5 n) (* 11 m m) (* 8 m))))
 
-    ;; foreign storage
-    (with-foreign-objects
-        ((pn      :int)
-         (pm      :int)
-         (x       :double n)
-         (l       :double n)
-         (u       :double n)
-         (nbd     :int n)
-         (f       :double)
-         (g       :double n)
-         (pfactr  :double)
-         (ppgtol  :double)
-         (wa      :double wa-size)
-         (iwa     :int (* 3 n))
-         (itask   :int)
-         (piprint :int)
-         (icsave  :int)
-         (lsave   :int 4)
-         (isave   :int 44)
-         (dsave   :double 29))
+      ;; foreign storage
+      (with-foreign-objects
+          ((pn      :int)
+           (pm      :int)
+           (x       :double n)
+           (l       :double n)
+           (u       :double n)
+           (nbd     :int n)
+           (f       :double)
+           (g       :double n)
+           (pfactr  :double)
+           (ppgtol  :double)
+           (wa      :double wa-size)
+           (iwa     :int (* 3 n))
+           (itask   :int)
+           (piprint :int)
+           (icsave  :int)
+           (lsave   :int 4)
+           (isave   :int 44)
+           (dsave   :double 29))
 
-      ;; initialise scalars
-      (setf (mem-ref pn      :int)    n
-            (mem-ref pm      :int)    m
-            (mem-ref pfactr  :double) factr
-            (mem-ref ppgtol  :double) pgtol
-            (mem-ref piprint :int)    iprint
-            (mem-ref itask   :int)    2      ; START
-            (mem-ref icsave  :int)    0)
+        ;; initialise scalars
+        (setf (mem-ref pn      :int)    n
+              (mem-ref pm      :int)    m
+              (mem-ref pfactr  :double) factr
+              (mem-ref ppgtol  :double) pgtol
+              (mem-ref piprint :int)    iprint
+              (mem-ref itask   :int)    2      ; START
+              (mem-ref icsave  :int)    0)
 
-      ;; zero workspaces (critical)
-      (dotimes (i wa-size) (setf (mem-aref wa :double i) 0d0))
-      (dotimes (i (* 3 n)) (setf (mem-aref iwa :int i) 0))
-      (dotimes (i 4)       (setf (mem-aref lsave :int i) 0))
-      (dotimes (i 44)      (setf (mem-aref isave :int i) 0))
-      (dotimes (i 29)      (setf (mem-aref dsave :double i) 0d0))
+        ;; zero workspaces (critical)
+        (dotimes (i wa-size) (setf (mem-aref wa :double i) 0d0))
+        (dotimes (i (* 3 n)) (setf (mem-aref iwa :int i) 0))
+        (dotimes (i 4)       (setf (mem-aref lsave :int i) 0))
+        (dotimes (i 44)      (setf (mem-aref isave :int i) 0))
+        (dotimes (i 29)      (setf (mem-aref dsave :double i) 0d0))
 
-      ;; copy initial data
-      (copy-to-foreign x0     x   :double)
-      (copy-to-foreign lo-vec l   :double)
-      (copy-to-foreign up-vec u   :double)
-      (copy-to-foreign nbd-vec nbd :int)
+        ;; copy initial data
+        (copy-to-foreign x0     x   :double)
+        (copy-to-foreign lo-vec l   :double)
+        (copy-to-foreign up-vec u   :double)
+        (copy-to-foreign nbd-vec nbd :int)
 
-      (let ((n-fg 0)
-            (lisp-x (make-array n :element-type 'double-float)))
+        (let ((n-fg 0)
+              (lisp-x (make-array n :element-type 'double-float)))
 
-        (loop
-          (setulb pn pm x l u nbd f g pfactr ppgtol
-                  wa iwa itask piprint icsave lsave isave dsave)
-          (let ((task (mem-ref itask :int)))
-            (cond
-              ;; ----- evaluate f and g -----
-              ((member task '(4 20 21))
-               (incf n-fg)
-               (when (> n-fg max-fg)
+          (loop
+            (setulb pn pm x l u nbd f g pfactr ppgtol
+                    wa iwa itask piprint icsave lsave isave dsave)
+            (let ((task (mem-ref itask :int)))
+              (cond
+                ;; ----- evaluate f and g -----
+                ((member task '(4 20 21))
+                 (incf n-fg)
+                 (when (> n-fg max-fg)
+                   (return-from lbfgsb3
+                     (make-lbfgsb3-result
+                      :x (copy-from-foreign x n :double)
+                      :f (mem-ref f :double)
+                      :g (copy-from-foreign g n :double)
+                      :task task
+                      :n-iter (mem-aref isave :int 29)
+                      :n-fg n-fg
+                      :message "MAX_FG_EVALUATIONS_REACHED")))
+
+                 ;; copy current x into a Lisp vector
+                 (dotimes (i n)
+                   (setf (aref lisp-x i) (mem-aref x :double i)))
+
+                 (let ((fv (funcall fn lisp-x))
+                       (gv (funcall gr lisp-x)))
+                   (setf (mem-ref f :double) (float fv 1d0))
+                   (dotimes (i n)
+                     (setf (mem-aref g :double i) (float (elt gv i) )))))
+
+                ;; NEW_X : optional iteration limit
+                ((= task 1)
+                 (let ((iter (mem-aref isave :int 29)))
+                   (when (and max-iter (>= iter max-iter))
+                     (return-from lbfgsb3
+                       (make-lbfgsb3-result
+                        :x (copy-from-foreign x n :double)
+                        :f (mem-ref f :double)
+                        :g (copy-from-foreign g n :double)
+                        :task task
+                        :n-iter iter
+                        :n-fg n-fg
+                        :message "MAX_ITERATIONS_REACHED")))))
+
+                ;; successful termination
+                ((member task '(6 7 8))
                  (return-from lbfgsb3
                    (make-lbfgsb3-result
                     :x (copy-from-foreign x n :double)
@@ -221,55 +260,19 @@ Returns an LBFGSB3-RESULT structure."
                     :task task
                     :n-iter (mem-aref isave :int 29)
                     :n-fg n-fg
-                    :message "MAX_FG_EVALUATIONS_REACHED")))
+                    :message (task-message task))))
 
-               ;; copy current x into a Lisp vector
-               (dotimes (i n)
-                 (setf (aref lisp-x i) (mem-aref x :double i)))
-
-               (let ((fv (funcall fn lisp-x))
-                     (gv (funcall gr lisp-x)))
-                 (setf (mem-ref f :double) (float fv 1d0))
-                 (dotimes (i n)
-                   (setf (mem-aref g :double i) (float (elt gv i) )))))
-
-              ;; NEW_X : optional iteration limit
-              ((= task 1)
-               (let ((iter (mem-aref isave :int 29)))
-                 (when (and max-iter (>= iter max-iter))
-                   (return-from lbfgsb3
-                     (make-lbfgsb3-result
-                      :x (copy-from-foreign x n :double)
-                      :f (mem-ref f :double)
-                      :g (copy-from-foreign g n :double)
-                      :task task
-                      :n-iter iter
-                      :n-fg n-fg
-                      :message "MAX_ITERATIONS_REACHED")))))
-
-              ;; successful termination
-              ((member task '(6 7 8))
-               (return-from lbfgsb3
-                 (make-lbfgsb3-result
-                  :x (copy-from-foreign x n :double)
-                  :f (mem-ref f :double)
-                  :g (copy-from-foreign g n :double)
-                  :task task
-                  :n-iter (mem-aref isave :int 29)
-                  :n-fg n-fg
-                  :message (task-message task))))
-
-              ;; error / warning / unknown
-              (t
-               (return-from lbfgsb3
-                 (make-lbfgsb3-result
-                  :x (copy-from-foreign x n :double)
-                  :f (mem-ref f :double)
-                  :g (copy-from-foreign g n :double)
-                  :task task
-                  :n-iter (mem-aref isave :int 29)
-                  :n-fg n-fg
-                  :message (task-message task)))))))))))
+                ;; error / warning / unknown
+                (t
+                 (return-from lbfgsb3
+                   (make-lbfgsb3-result
+                    :x (copy-from-foreign x n :double)
+                    :f (mem-ref f :double)
+                    :g (copy-from-foreign g n :double)
+                    :task task
+                    :n-iter (mem-aref isave :int 29)
+                    :n-fg n-fg
+                    :message (task-message task))))))))))))
 
 
 #|
