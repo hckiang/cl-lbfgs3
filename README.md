@@ -37,6 +37,24 @@ at linking.c. I am not proficient enough in Mac and Windows (nor have access to)
 to know how `load_library_from_memory` should look like in those platforms.
 Contribution is welcome.
 
+## Notes on usage
+
+When using this library, make sure all returned by your function are `double-float`.
+
+It is okay to throw signals etc in your objective function and gradients. If gradients
+isn't supplied a simple finite diff is used to approximate it, but it does not do anything
+especially sophisticated; if you experience numerical problems, you are advised to use
+a better algorithm for gradient approximation.
+
+SBCL has [systematically broken ISO/IEC 10967-2:2001 conformance](https://bugs.launchpad.net/sbcl/+bug/2160268)
+and qNaN sometimes can throw. The link above is about log, but as of 2026 many other
+math functions that has a range check is broken when it comes to qNaN. Also, SBCL
+does some low-level signalling for invalid floating point operations, even if this
+happens in a foreign library. For all these reasons, you must `handler-case` against 
+your objective function and gradients on SBCL. For serious numerical work with
+complicated likelihood from messy data, Clozure or one of commercial implementation
+would perhaps give you less surprises.
+
 ## Example
 
 ### Rosenbrock, unconstrained
@@ -81,14 +99,12 @@ Contribution is welcome.
 
 ## `lbfgsb3`
 
-Limited-memory BFGS with box constraints (L-BFGS-B 3.0 Fortran wrapper).
-
 ```lisp
-    (lbfgsb3 fn x0
-             &key gr lower upper
-                  (m 10) (factr 1d7) (pgtol 1d-5)
-                  (max-iter 200) (max-fg 2500)
-                  (iprint -1) (trace nil))
+(lbfgsb3 fn x0
+         &key gr lower upper
+              (m 10) (factr 1d7) (pgtol 1d-5)
+              (max-iter 200) (max-fg 2500)
+              (iprint -1) (trace nil))
 ```
 
 ### Arguments
