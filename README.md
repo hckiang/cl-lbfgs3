@@ -1,6 +1,4 @@
-#+CAPTION: Lisp alien propaganda
-#+NAME:    fig:lisp-alien
-[[https://www.lisperati.com/lisplogo_fancy_256.png]]
+![Lisp alien propaganda](https://www.lisperati.com/lisplogo_fancy_256.png)
 
 # cl+lbfgs3
 
