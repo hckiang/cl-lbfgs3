@@ -71,12 +71,11 @@ Contribution is welcome.
 ### Quadratic, constrained
 
 ```lisp
-    (lbfgsb3 (lambda (x) (reduce #'+ (map 'vector #'* x x)))
-             (make-array 5 :element-type 'double-float :initial-element 1d0)
-             :lower (make-array 5 :element-type 'double-float :initial-element 0.1234d0)
-             :upper (make-array 5 :element-type 'double-float :initial-element  2d0))
+(lbfgsb3 (lambda (x) (reduce #'+ (map 'vector #'* x x)))
+         (make-array 5 :element-type 'double-float :initial-element 1d0)
+         :lower (make-array 5 :element-type 'double-float :initial-element 0.1234d0)
+         :upper (make-array 5 :element-type 'double-float :initial-element  2d0))
 ```
-
 
 ## API
 
@@ -111,9 +110,15 @@ Limited-memory BFGS with box constraints (L-BFGS-B 3.0 Fortran wrapper).
 
 ### Return values
 
-Three values:
+A struct of type
 
-1. Approximate minimizer (vector),
-2. Final function value,
-3. Convergence information (Fortran `task` string / status).
-
+```lisp
+(defstruct lbfgsb3-result
+  x                      ; final point (simple-vector of double-float)
+  f                      ; final function value
+  g                      ; final gradient
+  task                   ; final itask code
+  n-iter                 ; number of iterations (isave[29] in 0-based)
+  n-fg                   ; number of function/gradient evaluations
+  message)               ; human-readable termination message
+```
