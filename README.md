@@ -1,3 +1,7 @@
+#+CAPTION: Lisp alien propaganda
+#+NAME:    fig:lisp-alien
+[[https://www.lisperati.com/lisplogo_fancy_256.png]]
+
 # cl+lbfgs3
 
 An Common Lisp FFI for the 2011 version of L-BFGS-B (C. Zhu, R. H. Byrd and J. Nocedal
