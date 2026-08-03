@@ -1,6 +1,6 @@
 ![Lisp alien propaganda](https://www.lisperati.com/lisplogo_fancy_256.png)
 
-# cl+lbfgs3
+# cl+lbfgsb3
 
 An Common Lisp FFI for the 2011 version of L-BFGS-B (C. Zhu, R. H. Byrd and J. Nocedal
 1997).
